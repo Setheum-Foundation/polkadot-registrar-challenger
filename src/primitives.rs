@@ -194,6 +194,9 @@ impl NetworkAddress {
     pub fn pub_key(&self) -> &PubKey {
         &self.pub_key
     }
+    pub fn algo(&self) -> &Algorithm {
+        &self.algo
+    }
 }
 
 impl TryFrom<NetAccount> for NetworkAddress {
@@ -205,13 +208,20 @@ impl TryFrom<NetAccount> for NetworkAddress {
             .from_base58()
             .map_err(|_| err_msg("failed to decode address from base58"))?;
 
-        if bytes.len() < 33 {
+        if bytes.len() < 56 {
             return Err(err_msg("invalid address"));
         }
 
+        let algo = match &bytes[48..55] {
+            &[3, 0] => Algorithm::Schnorr,
+            &[3, 1] => Algorithm::Edwards,
+            &[3, 2] => Algorithm::ECDSA,
+            _ => return Err(err_msg("failed to detect address algorithm")),
+        };
+
         Ok(NetworkAddress {
             address: value,
-            algo: Algorithm::Schnorr,
+            algo: algo,
             pub_key: PubKey::try_from(bytes[1..33].to_vec())?,
         })
     }
@@ -318,8 +328,9 @@ impl Challenge {
         let random: [u8; 16] = thread_rng().gen();
         Challenge(hex::encode(random))
     }
-    pub fn verify_challenge(&self, pub_key: &PubKey, sig: &Signature) -> bool {
-        pub_key
+    pub fn verify_challenge(&self, network_address: &NetworkAddress, sig: &Signature) -> bool {
+        network_address
+            .pub_key()
             .0
             .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
             .is_ok()

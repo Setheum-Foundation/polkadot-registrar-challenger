@@ -38,7 +38,7 @@ impl<'a> Verifier2<'a> {
         };
 
         for (network_address, challenge) in self.challenges {
-            if challenge.verify_challenge(network_address.pub_key(), &sig) {
+            if challenge.verify_challenge(network_address, &sig) {
                 self.valid.push((network_address, challenge));
             } else {
                 self.invalid.push((network_address, challenge));
