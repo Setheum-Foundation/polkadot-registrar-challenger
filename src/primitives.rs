@@ -5,8 +5,7 @@ use rand::{thread_rng, Rng};
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use schnorrkel::keys::PublicKey as SchnorrkelPubKey;
 use schnorrkel::sign::Signature as SchnorrkelSignature;
-use serde::de::Error as SerdeError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
@@ -26,11 +25,27 @@ pub fn unix_time() -> u64 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PubKey {
     Schnorr(SchnorrkelPubKey),
+    Edwards(Vec<u8>),
+    ECDSA(Vec<u8>),
 }
 
 impl PubKey {
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
+    pub fn as_bytes(&self) -> [u8; 32] {
+        use PubKey::*;
+
+        match self {
+            Schnorr(pk) => pk.to_bytes(),
+            Edwards(pk) => {
+                let mut ret = [0; 32];
+                ret.copy_from_slice(&pk[0..32]);
+                ret
+            }
+            ECDSA(pk) => {
+                let mut ret = [0; 32];
+                ret.copy_from_slice(&pk[0..32]);
+                ret
+            }
+        }
     }
 }
 
@@ -140,15 +155,7 @@ impl fmt::Display for Account {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NetworkAddress {
     address: NetAccount,
-    algo: Algorithm,
     pub_key: PubKey,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Algorithm {
-    Schnorr,
-    Edwards,
-    ECDSA,
 }
 
 impl NetworkAddress {
@@ -157,9 +164,6 @@ impl NetworkAddress {
     }
     pub fn pub_key(&self) -> &PubKey {
         &self.pub_key
-    }
-    pub fn algo(&self) -> &Algorithm {
-        &self.algo
     }
 }
 
@@ -176,17 +180,25 @@ impl TryFrom<NetAccount> for NetworkAddress {
             return Err(err_msg("invalid address"));
         }
 
-        let algo = match &bytes[1] {
-            48 => Algorithm::Schnorr,
-            49 => Algorithm::Edwards,
-            50 => Algorithm::ECDSA,
+        let pub_key = match &bytes[1] {
+            48 => PubKey::Schnorr(
+                SchnorrkelPubKey::from_bytes(&bytes[1..33])
+                    .map_err(|_| err_msg("invalid schnorr public key"))?,
+            ),
+            49 => PubKey::Schnorr(
+                SchnorrkelPubKey::from_bytes(&bytes[1..33])
+                    .map_err(|_| err_msg("invalid schnorr public key"))?,
+            ),
+            50 => PubKey::Schnorr(
+                SchnorrkelPubKey::from_bytes(&bytes[1..33])
+                    .map_err(|_| err_msg("invalid schnorr public key"))?,
+            ),
             _ => return Err(err_msg("failed to detect address algorithm")),
         };
 
         Ok(NetworkAddress {
             address: value,
-            algo: algo,
-            pub_key: PubKey::try_from(bytes[1..33].to_vec())?,
+            pub_key: pub_key,
         })
     }
 }
@@ -293,22 +305,14 @@ impl Challenge {
         Challenge(hex::encode(random))
     }
     pub fn verify_challenge(&self, network_address: &NetworkAddress, sig: &Signature) -> bool {
-        use Algorithm::*;
+        use PubKey::*;
 
-        let pub_key = network_address.pub_key().0;
-        match network_address.algo() {
-            Schnorr => {
-                pub_key
-                    .0
-                    .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
-                    .is_ok()
-            }
-            Edwards => {
-                false
-            }
-            ECDSA => {
-                false
-            }
+        match network_address.pub_key() {
+            Schnorr(pk) => pk
+                .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
+                .is_ok(),
+            Edwards(_) => false,
+            ECDSA(_) => false,
         }
     }
     pub fn as_str(&self) -> &str {
