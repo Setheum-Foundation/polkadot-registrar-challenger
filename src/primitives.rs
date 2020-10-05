@@ -24,7 +24,9 @@ pub fn unix_time() -> u64 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PubKey(SchnorrkelPubKey);
+pub enum PubKey {
+    Schnorr(SchnorrkelPubKey),
+}
 
 impl PubKey {
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -34,42 +36,7 @@ impl PubKey {
 
 impl From<SchnorrkelPubKey> for PubKey {
     fn from(value: SchnorrkelPubKey) -> Self {
-        PubKey(value)
-    }
-}
-
-impl TryFrom<Vec<u8>> for PubKey {
-    type Error = failure::Error;
-
-    fn try_from(value: Vec<u8>) -> Result<Self> {
-        Ok(PubKey(
-            SchnorrkelPubKey::from_bytes(&value).map_err(|_| err_msg("invalid public key"))?,
-        ))
-    }
-}
-
-impl Serialize for PubKey {
-    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&hex::encode(self.to_bytes()))
-    }
-}
-
-impl<'de> Deserialize<'de> for PubKey {
-    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let hex_str = <String as Deserialize>::deserialize(deserializer)?;
-        Ok(PubKey(
-            SchnorrkelPubKey::from_bytes(
-                &hex::decode(hex_str)
-                    .map_err(|_| SerdeError::custom("failed to decode public key from hex"))?,
-            )
-            .map_err(|_| SerdeError::custom("failed creating public key from bytes"))?,
-        ))
+        PubKey::Schnorr(value)
     }
 }
 
@@ -170,20 +137,17 @@ impl fmt::Display for Account {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NetworkAddress {
     address: NetAccount,
     algo: Algorithm,
     pub_key: PubKey,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Algorithm {
-    #[serde(rename = "schnorr")]
     Schnorr,
-    #[serde(rename = "edwards")]
     Edwards,
-    #[serde(rename = "ecdsa")]
     ECDSA,
 }
 
@@ -335,6 +299,7 @@ impl Challenge {
         match network_address.algo() {
             Schnorr => {
                 pub_key
+                    .0
                     .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
                     .is_ok()
             }

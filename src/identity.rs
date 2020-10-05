@@ -11,7 +11,7 @@ use std::convert::TryInto;
 use std::result::Result as StdResult;
 use tokio::time::{self, Duration};
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OnChainIdentity {
     network_address: NetworkAddress,
     accounts: Vec<AccountState>,
@@ -73,7 +73,7 @@ impl OnChainIdentity {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccountState {
     pub account: Account,
     pub account_ty: AccountType,
@@ -96,15 +96,11 @@ impl AccountState {
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub enum AccountStatus {
-    #[serde(rename = "unknown")]
     Unknown,
-    #[serde(rename = "valid")]
     Valid,
-    #[serde(rename = "invalid")]
     Invalid,
-    #[serde(rename = "notified")]
     Notified,
 }
 
