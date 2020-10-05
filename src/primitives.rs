@@ -208,14 +208,14 @@ impl TryFrom<NetAccount> for NetworkAddress {
             .from_base58()
             .map_err(|_| err_msg("failed to decode address from base58"))?;
 
-        if bytes.len() < 56 {
+        if bytes.len() < 33 {
             return Err(err_msg("invalid address"));
         }
 
-        let algo = match &bytes[48..55] {
-            &[3, 0] => Algorithm::Schnorr,
-            &[3, 1] => Algorithm::Edwards,
-            &[3, 2] => Algorithm::ECDSA,
+        let algo = match &bytes[1] {
+            48 => Algorithm::Schnorr,
+            49 => Algorithm::Edwards,
+            50 => Algorithm::ECDSA,
             _ => return Err(err_msg("failed to detect address algorithm")),
         };
 
