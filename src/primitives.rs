@@ -329,11 +329,22 @@ impl Challenge {
         Challenge(hex::encode(random))
     }
     pub fn verify_challenge(&self, network_address: &NetworkAddress, sig: &Signature) -> bool {
-        network_address
-            .pub_key()
-            .0
-            .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
-            .is_ok()
+        use Algorithm::*;
+
+        let pub_key = network_address.pub_key().0;
+        match network_address.algo() {
+            Schnorr => {
+                pub_key
+                    .verify_simple(b"substrate", self.0.as_bytes(), &sig.0)
+                    .is_ok()
+            }
+            Edwards => {
+                false
+            }
+            ECDSA => {
+                false
+            }
+        }
     }
     pub fn as_str(&self) -> &str {
         self.0.as_str()
